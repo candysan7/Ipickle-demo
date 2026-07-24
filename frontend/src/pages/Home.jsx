@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Calendar, MapPin, ArrowRight, Trophy, Users, GraduationCap, Swords, CheckCircle } from 'lucide-react';
 import { upcomingEvents, programs, locationNames } from '../data/content';
 import HomeSlideshow from '../components/HomeSlideshow';
+import heroPhoto from '../assets/home/home_2.jpg';
 
 const programIcons = { Tournaments: Trophy, 'Group Classes': Users, 'Private Lessons': GraduationCap, 'Pickleball Leagues': Swords };
 
@@ -12,9 +13,14 @@ export default function Home({ onChange }) {
   return (
     <div className="space-y-16">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl bg-green-900 p-8 sm:p-14">
-        <div className="absolute -top-24 -right-24 w-80 h-80 bg-green-700/40 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 -left-16 w-72 h-72 bg-teal-500/20 rounded-full blur-3xl" />
+      <section className="relative overflow-hidden rounded-3xl p-8 sm:p-14">
+        <img
+          src={heroPhoto}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover object-[50%_25%]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-green-950/95 via-green-950/70 to-green-950/40" />
         <div className="relative max-w-2xl space-y-6">
           <span className="inline-block text-xs font-semibold uppercase tracking-widest text-green-950 bg-white px-3 py-1 rounded-full">
             Southern California's Pickleball &amp; Tennis Club
