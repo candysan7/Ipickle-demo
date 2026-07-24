@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Upload, Trophy, Table, CheckCircle, Loader2, Sparkles, FileImage } from 'lucide-react';
 
 export default function App() {
+  // Dynamic backend URL: Uses Vercel environment variable in production, defaults to localhost locally
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +30,8 @@ export default function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('http://localhost:8000/api/scan', {
+      // Uses the dynamic backend URL here
+      const res = await fetch(`${BACKEND_URL}/api/scan`, {
         method: 'POST',
         body: formData,
       });
