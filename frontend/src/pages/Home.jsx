@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, MapPin, ArrowRight, Trophy, Users, GraduationCap, Swords, CheckCircle } from 'lucide-react';
 import { upcomingEvents, programs, locationNames } from '../data/content';
+import HomeSlideshow from '../components/HomeSlideshow';
 
 const programIcons = { Tournaments: Trophy, 'Group Classes': Users, 'Private Lessons': GraduationCap, 'Pickleball Leagues': Swords };
 
@@ -48,6 +49,9 @@ export default function Home({ onChange }) {
           </div>
         </div>
       </section>
+
+      {/* Slideshow */}
+      <HomeSlideshow />
 
       {/* Upcoming Events */}
       <section className="space-y-5">
