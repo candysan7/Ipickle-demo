@@ -83,7 +83,16 @@ function ScannerTool() {
         body: formData,
       });
 
-      if (!res.ok) throw new Error('Failed to parse score sheet');
+      if (!res.ok) {
+        let detail = `Request failed (${res.status})`;
+        try {
+          const errJson = await res.json();
+          detail = errJson.detail || detail;
+        } catch {
+          // response body wasn't JSON; fall back to the status-based message
+        }
+        throw new Error(detail);
+      }
       const json = await res.json();
       setData(json);
     } catch (err) {
@@ -177,11 +186,13 @@ function ScannerTool() {
               <thead className="bg-stone-50 text-stone-400 uppercase text-xs tracking-wider border-b border-stone-200">
                 <tr>
                   <th className="p-3 w-16 text-center">Team #</th>
-                  <th className="p-3">Player Names</th>
-                  {['rd1', 'rd2', 'rd3', 'rd4', 'rd5', 'rd6', 'rd7'].map((rd, idx) => (
+                  <th className="p-3">Player 1</th>
+                  <th className="p-3">Player 2</th>
+                  {['rd1', 'rd2', 'rd3', 'rd4', 'rd5', 'rd6', 'rd7', 'rd8', 'rd9'].map((rd, idx) => (
                     <th key={rd} className="p-3 text-center w-14">Rd {idx + 1}</th>
                   ))}
                   <th className="p-3 text-center w-16 text-green-800">Wins</th>
+                  <th className="p-3 text-center w-16 text-red-700">Losses</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -191,16 +202,24 @@ function ScannerTool() {
                     <td className="p-2">
                       <input
                         type="text"
-                        value={t.playerNames || ''}
-                        onChange={(e) => handleTeamChange(teamIdx, 'playerNames', e.target.value)}
+                        value={t.player1 || ''}
+                        onChange={(e) => handleTeamChange(teamIdx, 'player1', e.target.value)}
                         className="w-full bg-stone-50 border border-stone-200 focus:border-green-600 rounded px-2.5 py-1 text-stone-900 font-semibold outline-none transition"
                       />
                     </td>
-                    {['rd1', 'rd2', 'rd3', 'rd4', 'rd5', 'rd6', 'rd7'].map((rd) => (
+                    <td className="p-2">
+                      <input
+                        type="text"
+                        value={t.player2 || ''}
+                        onChange={(e) => handleTeamChange(teamIdx, 'player2', e.target.value)}
+                        className="w-full bg-stone-50 border border-stone-200 focus:border-green-600 rounded px-2.5 py-1 text-stone-900 font-semibold outline-none transition"
+                      />
+                    </td>
+                    {['rd1', 'rd2', 'rd3', 'rd4', 'rd5', 'rd6', 'rd7', 'rd8', 'rd9'].map((rd) => (
                       <td key={rd} className="p-2 text-center">
                         <input
                           type="text"
-                          value={t[rd] !== undefined ? t[rd] : ''}
+                          value={t[rd] !== undefined && t[rd] !== null ? t[rd] : ''}
                           onChange={(e) => handleTeamChange(teamIdx, rd, e.target.value)}
                           className="w-12 text-center bg-stone-50 border border-stone-200 focus:border-green-600 rounded py-1 text-stone-700 outline-none transition"
                         />
@@ -209,9 +228,17 @@ function ScannerTool() {
                     <td className="p-2 text-center">
                       <input
                         type="text"
-                        value={t.wins !== undefined ? t.wins : ''}
+                        value={t.wins !== undefined && t.wins !== null ? t.wins : ''}
                         onChange={(e) => handleTeamChange(teamIdx, 'wins', e.target.value)}
                         className="w-12 text-center bg-stone-50 border border-stone-200 focus:border-green-600 rounded py-1 text-green-800 font-bold outline-none transition"
+                      />
+                    </td>
+                    <td className="p-2 text-center">
+                      <input
+                        type="text"
+                        value={t.losses !== undefined && t.losses !== null ? t.losses : ''}
+                        onChange={(e) => handleTeamChange(teamIdx, 'losses', e.target.value)}
+                        className="w-12 text-center bg-stone-50 border border-stone-200 focus:border-red-500 rounded py-1 text-red-700 font-bold outline-none transition"
                       />
                     </td>
                   </tr>
@@ -232,7 +259,7 @@ function ScannerTool() {
               <thead className="bg-stone-50 text-stone-400 uppercase text-xs tracking-wider border-b border-stone-200">
                 <tr>
                   <th className="p-3 w-28">Court</th>
-                  {['round1', 'round2', 'round3', 'round4', 'round5', 'round6', 'round7'].map((rd, idx) => (
+                  {['round1', 'round2', 'round3', 'round4', 'round5', 'round6', 'round7', 'round8', 'round9'].map((rd, idx) => (
                     <th key={rd} className="p-3 text-center">Round {idx + 1}</th>
                   ))}
                 </tr>
@@ -241,7 +268,7 @@ function ScannerTool() {
                 {data.schedule.map((s, schedIdx) => (
                   <tr key={schedIdx} className="hover:bg-stone-50 transition">
                     <td className="p-2 font-semibold text-teal-700">Court {s.courtNumber}</td>
-                    {['round1', 'round2', 'round3', 'round4', 'round5', 'round6', 'round7'].map((rd) => (
+                    {['round1', 'round2', 'round3', 'round4', 'round5', 'round6', 'round7', 'round8', 'round9'].map((rd) => (
                       <td key={rd} className="p-2 text-center">
                         <input
                           type="text"

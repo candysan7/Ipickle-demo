@@ -21,23 +21,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY") #https://aistudio.google.com/api-keys?projectFilter=gen-lang-client-0163356653
 if not api_key:
     raise RuntimeError("GEMINI_API_KEY environment variable is missing.")
 
 client = genai.Client(api_key=api_key)
 
+MAX_DIMENSION = 2048  # long edge cap; Gemini vision tiles images beyond this with no OCR benefit
+JPEG_QUALITY = 92      # high enough to keep handwriting/small text legible
+
+
+def prepare_image_for_ocr(contents: bytes) -> Image.Image:
+    image = Image.open(io.BytesIO(contents))
+    image = image.convert("RGB") if image.mode not in ("RGB", "L") else image
+
+    width, height = image.size
+    longest_edge = max(width, height)
+    if longest_edge > MAX_DIMENSION:
+        scale = MAX_DIMENSION / longest_edge
+        new_size = (round(width * scale), round(height * scale))
+        image = image.resize(new_size, Image.LANCZOS)
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+    buffer.seek(0)
+    return Image.open(buffer)
+
+
 @app.post("/api/scan")
 async def scan_scoresheet(file: UploadFile = File(...)):
     try:
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
+        image = prepare_image_for_ocr(contents)
 
         prompt = """
         You are an expert OCR parser for Pickleball tournament score sheets.
         Extract all table data from this round-robin sheet into a strict single JSON object.
-        
+
         Ignore handwriting notes outside of tables or margins (such as podium notes or signature notes). Focus strictly on grid tables.
+
+        The player score table always has 9 rounds (rd1 through rd9), even if some sheets only use fewer columns.
+        If a round column has no score recorded for a team (blank/not played), use null for that round.
+
+        Every team row must always include both "wins" and "losses" filled in with integers (never null/omitted).
+        Read wins/losses directly from the W and L columns on the sheet if present. If those columns are not present
+        or illegible, derive wins/losses by comparing each team's score to their opponent's score for that round
+        (per the court schedule matchups) across all 9 rounds.
 
         Required JSON format:
         {
@@ -49,9 +78,10 @@ async def scan_scoresheet(file: UploadFile = File(...)):
           "teams": [
             {
               "teamNumber": 1,
-              "playerNames": "Nathaniel Ting / John Yu",
-              "rd1": 5, "rd2": 11, "rd3": 8, "rd4": 11, "rd5": 11, "rd6": 9, "rd7": 5,
-              "wins": 3
+              "player1": "Nathaniel Ting",
+              "player2": "John Yu",
+              "rd1": 5, "rd2": 11, "rd3": 8, "rd4": 11, "rd5": 11, "rd6": 9, "rd7": 5, "rd8": 3, "rd9": 11,
+              "wins": 5, "losses": 4
             }
           ],
           "schedule": [
@@ -63,7 +93,9 @@ async def scan_scoresheet(file: UploadFile = File(...)):
               "round4": "5 v 7",
               "round5": "1 v 3",
               "round6": "4 v 5",
-              "round7": "3 v 7"
+              "round7": "3 v 7",
+              "round8": "1 v 8",
+              "round9": "9 v 7"
             }
           ]
         }
