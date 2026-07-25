@@ -27,6 +27,12 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
+
+@app.get("/health") # for the cron job to check if the backend is up and running # https://console.cron-job.org/jobs/8157029/history
+async def health():
+    return {"status": "ok"}
+
+
 MAX_DIMENSION = 2048  # long edge cap; Gemini vision tiles images beyond this with no OCR benefit
 JPEG_QUALITY = 92      # high enough to keep handwriting/small text legible
 
