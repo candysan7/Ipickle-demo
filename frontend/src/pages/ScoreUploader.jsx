@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Upload, Trophy, Table, CheckCircle, Loader2, Sparkles, FileImage, Lock, Download, Search, AlertTriangle, X } from 'lucide-react';
 import RefreshPlayerListButton from '../components/RefreshPlayerListButton';
 
@@ -199,11 +199,6 @@ function ScannerTool() {
   const [duplicateQueue, setDuplicateQueue] = useState([]); // [{ teamIndex, field, name, candidates }]
   const [pendingMissingNames, setPendingMissingNames] = useState([]);
   const [exportErrors, setExportErrors] = useState([]);
-  const duplicateListRef = useRef(null);
-
-  useEffect(() => {
-    if (duplicateListRef.current) duplicateListRef.current.scrollTop = 0;
-  }, [duplicateQueue[0]?.name, duplicateQueue[0]?.field, duplicateQueue[0]?.teamIndex]);
 
   const handleExportCsv = () => {
     const result = downloadScoresCsv(data);
@@ -635,7 +630,10 @@ function ScannerTool() {
             <p className="text-sm text-stone-500">
               Multiple registry entries match this name ({duplicateQueue.length} name{duplicateQueue.length > 1 ? 's' : ''} left to resolve). Pick the correct player:
             </p>
-            <ul ref={duplicateListRef} className="max-h-80 overflow-y-auto space-y-2">
+            <ul
+              key={`${duplicateQueue[0].teamIndex}-${duplicateQueue[0].field}-${duplicateQueue[0].name}`}
+              className="max-h-80 overflow-y-auto space-y-2"
+            >
               {duplicateQueue[0].candidates.map((c) => (
                 <li key={c.duprId}>
                   <button
