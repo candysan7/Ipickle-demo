@@ -55,66 +55,8 @@ function sanitizeForFilename(value) {
   return String(value || '').trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
-function isIntegerValue(v) {
-  return v !== '' && v !== null && v !== undefined && /^-?\d+$/.test(String(v).trim());
-}
-
-// Enforces the DUPR bulk-upload CSV schema: required fields, matchType/scoreType enums,
-// integer game scores, ISO date, and doubles-only requirements for the second player slot.
-function validateRows(rows) {
-  const errors = [];
-  if (rows.length === 0) {
-    errors.push('No matches found to export — check the schedule table matchups.');
-    return errors;
-  }
-
-  rows.forEach((row, idx) => {
-    const label = `Row ${idx + 1} (${row.playerA1 || '?'}${row.playerA2 ? '/' + row.playerA2 : ''} vs ${row.playerB1 || '?'}${row.playerB2 ? '/' + row.playerB2 : ''})`;
-
-    if (!['S', 'D'].includes(row.matchType)) {
-      errors.push(`${label}: matchType must be "S" or "D" (got "${row.matchType}")`);
-    }
-    if (!String(row.event || '').trim()) errors.push(`${label}: event is required`);
-    if (!String(row.date || '').trim()) {
-      errors.push(`${label}: date is required`);
-    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date).trim())) {
-      errors.push(`${label}: date should be YYYY-MM-DD (got "${row.date}")`);
-    }
-
-    if (!String(row.playerA1 || '').trim()) errors.push(`${label}: playerA1 is required`);
-    if (!String(row.playerA1DuprId || '').trim()) errors.push(`${label}: playerA1DuprId is required`);
-    if (!String(row.playerB1 || '').trim()) errors.push(`${label}: playerB1 is required`);
-    if (!String(row.playerB1DuprId || '').trim()) errors.push(`${label}: playerB1DuprId is required`);
-
-    if (row.matchType === 'D') {
-      if (!String(row.playerA2 || '').trim()) errors.push(`${label}: playerA2 is required for doubles`);
-      if (!String(row.playerA2DuprId || '').trim()) errors.push(`${label}: playerA2DuprId is required for doubles`);
-      if (!String(row.playerB2 || '').trim()) errors.push(`${label}: playerB2 is required for doubles`);
-      if (!String(row.playerB2DuprId || '').trim()) errors.push(`${label}: playerB2DuprId is required for doubles`);
-    }
-
-    if (!isIntegerValue(row.teamAGame1)) errors.push(`${label}: teamAGame1 must be an integer (got "${row.teamAGame1}")`);
-    if (!isIntegerValue(row.teamBGame1)) errors.push(`${label}: teamBGame1 must be an integer (got "${row.teamBGame1}")`);
-
-    ['2', '3', '4', '5'].forEach((n) => {
-      const a = row[`teamAGame${n}`];
-      const b = row[`teamBGame${n}`];
-      if (String(a || '').trim() && !isIntegerValue(a)) errors.push(`${label}: teamAGame${n} must be an integer if provided (got "${a}")`);
-      if (String(b || '').trim() && !isIntegerValue(b)) errors.push(`${label}: teamBGame${n} must be an integer if provided (got "${b}")`);
-    });
-
-    if (!['SIDEOUT', 'RALLY'].includes(row.scoreType)) {
-      errors.push(`${label}: scoreType must be "SIDEOUT" or "RALLY" (got "${row.scoreType}")`);
-    }
-  });
-
-  return errors;
-}
-
 function downloadScoresCsv(data) {
   const rows = buildMatchRowsFromScan(data);
-  const errors = validateRows(rows);
-  if (errors.length > 0) return { success: false, errors };
 
   const lines = [CSV_HEADERS.join(',')];
   rows.forEach((row) => {
@@ -198,12 +140,6 @@ function ScannerTool() {
   const [matchIssue, setMatchIssue] = useState(null); // { type: 'missing', names: string[] }
   const [duplicateQueue, setDuplicateQueue] = useState([]); // [{ teamIndex, field, name, candidates }]
   const [pendingMissingNames, setPendingMissingNames] = useState([]);
-  const [exportErrors, setExportErrors] = useState([]);
-
-  const handleExportCsv = () => {
-    const result = downloadScoresCsv(data);
-    if (!result.success) setExportErrors(result.errors);
-  };
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
@@ -296,6 +232,7 @@ function ScannerTool() {
         ['player1', 'player2'].forEach((field) => {
           const name = team[field];
           if (!name) return;
+          if (String(team[`${field}DuprId`] || '').trim()) return; // already filled, skip
           const key = name.trim().toLowerCase();
           const matches = registryByName.get(key);
 
@@ -597,7 +534,7 @@ function ScannerTool() {
               <span>{matching ? 'Matching Players...' : 'Find DUPR IDs'}</span>
             </button>
             <button
-              onClick={handleExportCsv}
+              onClick={() => downloadScoresCsv(data)}
               className="flex-1 flex items-center justify-center space-x-2 bg-teal-500 hover:bg-teal-400 text-white font-bold py-4 rounded-2xl shadow-lg shadow-teal-200 transition cursor-pointer text-base tracking-wide"
             >
               <Download className="w-5 h-5" />
@@ -695,37 +632,6 @@ function ScannerTool() {
         </div>
       )}
 
-      {exportErrors.length > 0 && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5 text-red-600">
-                <AlertTriangle className="w-6 h-6" />
-                <h3 className="text-lg font-bold text-stone-900">Can't export yet</h3>
-              </div>
-              <button onClick={() => setExportErrors([])} className="text-stone-400 hover:text-stone-600 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-sm text-stone-500">
-              The DUPR upload schema requires these to be fixed before exporting:
-            </p>
-            <ul className="max-h-80 overflow-y-auto space-y-1.5">
-              {exportErrors.map((err, i) => (
-                <li key={i} className="px-3 py-2 rounded-lg text-sm font-semibold bg-red-50 text-red-700">
-                  {err}
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => setExportErrors([])}
-              className="w-full bg-stone-800 hover:bg-stone-700 text-white font-semibold py-2.5 rounded-xl transition cursor-pointer"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
