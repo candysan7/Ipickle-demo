@@ -1,6 +1,7 @@
+import csv
 import json
 import os
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import Body, FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
@@ -12,10 +13,14 @@ load_dotenv()
 
 app = FastAPI()
 
-# Enable CORS for local React development
+# Enable CORS for local React development, plus dashboard.dupr.com so the refresh
+# bookmarklet (run from the DUPR site) can push member data to this backend.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174", "http://localhost:3000", "http://localhost:5173", "https://ipickledemo.vercel.app"],
+    allow_origins=[
+        "http://localhost:5174", "http://localhost:3000", "http://localhost:5173",
+        "https://ipickledemo.vercel.app", "https://dashboard.dupr.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,6 +36,83 @@ client = genai.Client(api_key=api_key)
 @app.get("/health") # for the cron job to check if the backend is up and running # https://console.cron-job.org/jobs/8157029/history
 async def health():
     return {"status": "ok"}
+
+
+PLAYER_REGISTRY_PATH = os.path.join(os.path.dirname(__file__), "data", "iPickle_Club_Members_Master.csv")
+
+
+@app.get("/api/players")
+async def get_players():
+    if not os.path.exists(PLAYER_REGISTRY_PATH):
+        raise HTTPException(status_code=404, detail="Player registry file not found.")
+
+    players = []
+    with open(PLAYER_REGISTRY_PATH, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            name = (row.get("Name") or "").strip()
+            if not name:
+                continue
+            players.append({
+                "name": name,
+                "duprId": (row.get("DUPR ID") or "").strip(),
+                "rating": (row.get("DUPR Rating") or "").strip(),
+                "location": (row.get("Location") or "").strip(),
+                "age": (row.get("Age") or "").strip(),
+                "gender": (row.get("Gender") or "").strip(),
+                "doublesRating": (row.get("Doubles Rating") or "").strip(),
+                "singlesRating": (row.get("Singles Rating") or "").strip(),
+            })
+
+    return {"players": players}
+
+
+def dedupe_members(members: list[dict]) -> list[dict]:
+    """Concurrent pagination against DUPR's search-backed endpoint can return the same
+    member on more than one page (its result ordering isn't stable across requests).
+    Collapse those by DUPR ID so real duplicate people (same name, different ID) are
+    the only ones left for the picker to resolve."""
+    seen = {}
+    for m in members:
+        key = m.get("duprId") or m.get("id")
+        if key not in seen:
+            seen[key] = m
+    return list(seen.values())
+
+
+def write_members_csv(members: list[dict]) -> None:
+    members = dedupe_members(members)
+    with open(PLAYER_REGISTRY_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Name", "DUPR ID", "Location", "Age", "Gender", "Doubles Rating", "Singles Rating", "Role", "DUPR Rating"])
+        for m in members:
+            role = (m.get("roles") or [{}])[0].get("role", "")
+            doubles = m.get("doubles") or "NR"
+            writer.writerow([
+                m.get("fullName") or "",
+                m.get("duprId") or "",
+                m.get("shortAddress") or "",
+                m.get("age") if m.get("age") is not None else "",
+                m.get("gender") or "",
+                doubles,
+                m.get("singles") or "NR",
+                role,
+                doubles,  # alias so /api/players' "DUPR Rating" lookup keeps working
+            ])
+
+
+@app.post("/api/players/refresh-from-browser")
+async def refresh_players_from_browser(members: list[dict] = Body(..., embed=True)):
+    """Receives member data collected by the DUPR refresh bookmarklet (see
+    frontend/src/components/RefreshPlayerListButton.jsx) and overwrites the local CSV.
+    No DUPR credentials ever touch this backend — the bookmarklet runs in the
+    user's own logged-in dashboard.dupr.com tab and pushes the results here."""
+    if not members:
+        raise HTTPException(status_code=400, detail="No members received.")
+
+    deduped = dedupe_members(members)
+    write_members_csv(deduped)
+    return {"status": "ok", "count": len(deduped)}
 
 
 MAX_DIMENSION = 2048  # long edge cap; Gemini vision tiles images beyond this with no OCR benefit
